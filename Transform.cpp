@@ -68,10 +68,9 @@ void TRANSFORM::Identity()
     right.z = 0.0f;
 }
 
-void TRANSFORM::FromMatrix(DirectX::XMMATRIX& pMat)
+void XM_CALLCONV TRANSFORM::FromMatrix(DirectX::FXMMATRIX pMat)
 {
     XMStoreFloat4x4(&mMatrix, pMat);
-    mDirty = true;
 }
 
 void TRANSFORM::UpdateMatrix()
@@ -84,7 +83,7 @@ void TRANSFORM::UpdateMatrix()
     DirectX::XMMATRIX translationMatrix = DirectX::XMMatrixTranslationFromVector(DirectX::XMLoadFloat3(&position));
     DirectX::XMMATRIX rotation = DirectX::XMLoadFloat4x4(&mRotation);
 
-    DirectX::XMMATRIX matrix = DirectX::XMLoadFloat4x4(&mMatrix);
+    DirectX::XMMATRIX matrix = DirectX::XMMatrixIdentity();
     matrix = DirectX::XMMatrixMultiply(matrix, rotation);
     matrix = DirectX::XMMatrixMultiply(matrix, scalingMatrix);
     matrix = DirectX::XMMatrixMultiply(matrix, translationMatrix);
@@ -98,7 +97,7 @@ DirectX::XMMATRIX TRANSFORM::GetMatrix() const
     return XMLoadFloat4x4(&mMatrix);
 }
 
-void TRANSFORM::SetPosition(DirectX::XMVECTOR& pVec)
+void XM_CALLCONV TRANSFORM::SetPosition(DirectX::FXMVECTOR pVec)
 {
     XMStoreFloat3(&position, pVec);
     mDirty = true;
@@ -158,8 +157,10 @@ void TRANSFORM::RotateRoll(float angle)
 {
 }
 
-void TRANSFORM::LookAt(DirectX::XMVECTOR vector)
+void XM_CALLCONV TRANSFORM::LookAt(DirectX::FXMVECTOR trg)
 {
-    DirectX::XMMATRIX view = DirectX::XMMatrixLookAtLH(XMLoadFloat3(&position), vector, XMLoadFloat3(&up));
-    XMStoreFloat4x4(&mMatrix, view);
+    //DirectX::XMMATRIX view = DirectX::XMMatrixLookAtLH(XMLoadFloat3(&position), trg, XMLoadFloat3(&up));
+    DirectX::XMMATRIX view = DirectX::XMMatrixLookAtLH(DirectX::XMVectorZero(), trg, XMLoadFloat3(&up));
+    XMStoreFloat4x4(&mRotation, view);
+    mDirty = true;
 }

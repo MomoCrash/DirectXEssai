@@ -72,7 +72,7 @@ bool Application::InitializeWindow()
 	wc.hInstance     = mwInstance;
 	wc.hIcon         = LoadIcon(0, IDI_APPLICATION);
 	wc.hCursor       = LoadCursor(0, IDC_ARROW);
-	wc.hbrBackground = (HBRUSH)GetStockObject(NULL_BRUSH);
+	wc.hbrBackground = NULL;//(HBRUSH)GetStockObject(NULL_BRUSH);
 	wc.lpszMenuName  = 0;
 	wc.lpszClassName = L"MainWnd";
 
@@ -202,27 +202,24 @@ int Application::Run()
 	while(msg.message != WM_QUIT)
 	{
 		// If there are Window messages then process them.
-		if(PeekMessage( &msg, 0, 0, 0, PM_REMOVE ))
+		while(PeekMessage( &msg, 0, 0, 0, PM_REMOVE ))
 		{
 			TranslateMessage( &msg );
 			DispatchMessage( &msg );
 		}
-		// Otherwise, do animation/game stuff.
-		else
-		{	
-			mTimer.Tick();
+		
+		mTimer.Tick();
 
-			if( !mAppPaused )
-			{
-				UpdateTimer();
-				Update();
-				Draw();
-			}
-			else
-			{
-				Sleep(100);
-			}
+		if( !mAppPaused )
+		{
+			UpdateTimer();
+			Update();
+			Draw();
 		}
+		//else
+		//{
+	//		Sleep(100);
+	//	}
 	}
 
 	return (int)msg.wParam;

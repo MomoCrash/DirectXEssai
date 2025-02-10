@@ -24,16 +24,16 @@ public:
     DirectX::XMFLOAT3 position;
 
     void Identity();
-    void FromMatrix(DirectX::XMMATRIX& pMat);
+    void XM_CALLCONV FromMatrix(DirectX::FXMMATRIX pMat);
     void UpdateMatrix();
     DirectX::XMMATRIX GetMatrix() const;
 
-    void SetPosition(DirectX::XMVECTOR& pVec);
+    void XM_CALLCONV SetPosition(DirectX::FXMVECTOR pVec);
 
     void Rotate(float pitch, float yaw, float roll);
     void RotatePitch(float angle);
     void RotateYaw(float angle);
     void RotateRoll(float angle);
 
-    void LookAt(DirectX::XMVECTOR vector);
+    void XM_CALLCONV LookAt(DirectX::FXMVECTOR vector);
 };

@@ -308,6 +308,7 @@
       <LinkCompiled>true</LinkCompiled>
       <AdditionalIncludeDirectories>;C:\Users\momo1\RiderProjects\vcpkg\installed\x64-windows\include</AdditionalIncludeDirectories>
     </ClCompile>
+    <ClCompile Include="RenderObject.cpp" />
     <ClCompile Include="Shader.cpp" />
     <ClCompile Include="RenderApplication.cpp" />
     <ClCompile Include="Transform.cpp" />
@@ -316,6 +317,7 @@
     <ClInclude Include="Camera.h" />
     <ClInclude Include="Application.h" />
     <ClInclude Include="lib\d3dUtils.h" />
+    <ClInclude Include="RenderObject.h" />
     <ClInclude Include="UploadBuffer.h" />
     <ClInclude Include="lib\d3dx12.h" />
     <ClInclude Include="lib\GameTimer.h" />

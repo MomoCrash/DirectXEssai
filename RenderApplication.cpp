@@ -14,11 +14,11 @@ bool RenderApplication::Initialize()
 {
     
     mWorld.Identity();
-    mProj.Identity();
     camera = Camera();
 
-	XMVECTOR finalPosition = XMVectorSet(1.0f, -0.0f, -3.0f, 1.0f);
+	XMVECTOR finalPosition = XMVectorSet(0.0f, 0.0f, -7.0f, 1.0f);
 	camera.GetTransform().SetPosition(finalPosition);
+	camera.GetTransform().Rotate(0, 0, 180.f);
 
 	Application::Initialize();
 
@@ -68,51 +68,65 @@ bool RenderApplication::Initialize()
     CreateTriangle();
     BuildPSO();
 
+	OnResize();
+
     return true;
 }
 
 void RenderApplication::Update()
 {
 
-	float speed = 10.0f;
+	float speed = 1.0f;
 
 	XMVECTOR cPosition = XMLoadFloat3(&camera.GetTransform().position);
 	XMVECTOR cForward = XMLoadFloat3(&camera.GetTransform().forward);
+	XMVECTOR cUp = XMLoadFloat3(&camera.GetTransform().up);
 	XMVECTOR cRight = XMLoadFloat3(&camera.GetTransform().right);
 
-	if (d3dUtils::IsKeyDown(0x5A))
+	if (d3dUtils::IsKeyDown(VK_SPACE))
+	{
+		cPosition = XMVectorAdd(cPosition, cUp * mTimer.DeltaTime() * speed);
+		camera.GetTransform().SetPosition(cPosition);
+	}
+	
+	if (d3dUtils::IsKeyDown(VK_SHIFT))
+	{
+		cPosition = XMVectorSubtract(cPosition, cUp * mTimer.DeltaTime() * speed);
+		camera.GetTransform().SetPosition(cPosition);
+	}
+	
+	if (d3dUtils::IsKeyDown('Z'))
 	{
 		cPosition = XMVectorAdd(cPosition, cForward * mTimer.DeltaTime() * speed);
 		camera.GetTransform().SetPosition(cPosition);
 	}
 
-	if (d3dUtils::IsKeyDown(0x53))
+	if (d3dUtils::IsKeyDown('S'))
 	{
 		cPosition = XMVectorSubtract(cPosition, cForward * mTimer.DeltaTime() * speed);
 		camera.GetTransform().SetPosition(cPosition);
 	}
 	
-	if (d3dUtils::IsKeyDown(0x44))
+	if (d3dUtils::IsKeyDown('Q'))
 	{
-		cPosition= XMVectorAdd(cPosition, cRight * mTimer.DeltaTime() * speed);
+		cPosition= XMVectorSubtract(cPosition, cRight * mTimer.DeltaTime() * speed);
 		camera.GetTransform().SetPosition(cPosition);
 	}
 	
-	if (d3dUtils::IsKeyDown(0x51))
+	if (d3dUtils::IsKeyDown('D'))
 	{
-		cPosition = XMVectorSubtract(cPosition, cRight * mTimer.DeltaTime() * speed);
+		cPosition = XMVectorAdd(cPosition, cRight * mTimer.DeltaTime() * speed);
 		camera.GetTransform().SetPosition(cPosition);
 	}
 
-	
-	camera.GetTransform().LookAt(XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f));
+	std::cout << "x. " << camera.GetTransform().position.x << " y." << camera.GetTransform().position.y << " z." << camera.GetTransform().position.z << std::endl;
+	std::cout << "x. " << camera.GetTransform().forward.x << " y." << camera.GetTransform().forward.y << " z." << camera.GetTransform().forward.z << std::endl;
+
 
 	mWorld.UpdateMatrix();
-	camera.Update();
-	mProj.UpdateMatrix();
-
-
-	XMMATRIX worldViewProj = mWorld.GetMatrix() * camera.GetTransform().GetMatrix() * mProj.GetMatrix();
+	camera.UpdateMatrix();
+	
+	XMMATRIX worldViewProj = mWorld.GetMatrix() * camera.GetTransform().GetMatrix() * XMLoadFloat4x4(&mProj);
     XMStoreFloat4x4(&WorldViewProj, worldViewProj);
 
 	// Update the constant buffer with the latest worldViewProj matrix.
@@ -164,7 +178,7 @@ void RenderApplication::Draw()
     mCommandList->SetGraphicsRootDescriptorTable(0, mCbvHeap->GetGPUDescriptorHandleForHeapStart());
 
     mCommandList->DrawIndexedInstanced(
-		6, 1, 0, 0, 0);
+		36, 1, 0, 0, 0);
 
 	barrier = CD3DX12_RESOURCE_BARRIER::Transition(GetCurrentBackBuffer(),
 		D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
@@ -190,16 +204,22 @@ void RenderApplication::Draw()
 
 void RenderApplication::OnMouseDown(WPARAM btnState, int x, int y)
 {
+	mTurn = true;
+	mLastMousePosition.x = x;
+	mLastMousePosition.y = y;
 }
 
 void RenderApplication::OnMouseUp(WPARAM btnState, int x, int y)
 {
+	mTurn = false;
 }
 
 void RenderApplication::OnMouseMove(WPARAM btnState, int x, int y)
 {
 
-	float sensitivity = 0.01f;
+	if(!mTurn) return;
+
+	float sensitivity = 0.1f;
 		
 	// Make each pixel correspond to a degree.
 	float dx = static_cast<float>(x - mLastMousePosition.x) * sensitivity;
@@ -211,11 +231,17 @@ void RenderApplication::OnMouseMove(WPARAM btnState, int x, int y)
 	mLastMousePosition.x = x;
 	mLastMousePosition.y = y;
 	
-	if (mPitch > 89.0f || mPitch < -89.0f)
-		return;
+	if (mPitch > 89.0f)
+	{
+		mPitch = 90.0f;
+	}
+	if (mPitch < -89.0f)
+	{
+		mPitch = -90.0f;
+	}
 
 	// Update angles based on input to orbit camera around box.
-	camera.GetTransform().Rotate(dy, dx, 0.0f);
+	camera.GetTransform().Rotate(dy,  dx, 0.0f);
 	
 }
 
@@ -229,8 +255,8 @@ void RenderApplication::OnResize()
     Application::OnResize();
 
 	// The window resized, so update the aspect ratio and recompute the projection matrix.
-	XMMATRIX P = XMMatrixPerspectiveFovLH(0.25f*Maths::PI, AspectRatio(), 1.0f, 1000.0f);
-	mProj.FromMatrix(P);
+	XMMATRIX ProjMatrix = XMMatrixPerspectiveFovLH(0.25f*Maths::PI, AspectRatio(), 0.000001f, 1000);
+	XMStoreFloat4x4(&mProj, ProjMatrix);
 }
 
 void RenderApplication::BuildPSO()
@@ -300,19 +326,42 @@ void RenderApplication::CreateTriangle()
 	
 	{
 		// Define the geometry for a triangle.
-		std::array<Vertex, 6> vertices {
-			Vertex({ XMFLOAT3(0.0f, 1.0f, 0.0f), XMFLOAT4(Colors::White) }),
-			Vertex({ XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT4(Colors::Black) }),
-			Vertex({ XMFLOAT3(1.0f, 0.0f, 0.0f), XMFLOAT4(Colors::Red) }),
-			
-			Vertex({ XMFLOAT3(1.0f, 0.0f, 0.0f), XMFLOAT4(Colors::Blue) }),
-			Vertex({ XMFLOAT3(1.0f, 1.0f, 0.0f), XMFLOAT4(Colors::LightBlue) }),
-			Vertex({ XMFLOAT3(0.0f, 1.0f, 0.0f), XMFLOAT4(Colors::White) })
+		std::array<Vertex, 8> vertices {
+			Vertex({ XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT4(Colors::White) }),
+			Vertex({ XMFLOAT3(-1.0f, +1.0f, -1.0f), XMFLOAT4(Colors::Black) }),
+			Vertex({ XMFLOAT3(+1.0f, +1.0f, -1.0f), XMFLOAT4(Colors::Red) }),
+			Vertex({ XMFLOAT3(+1.0f, -1.0f, -1.0f), XMFLOAT4(Colors::Green) }),
+			Vertex({ XMFLOAT3(-1.0f, -1.0f, +1.0f), XMFLOAT4(Colors::Blue) }),
+			Vertex({ XMFLOAT3(-1.0f, +1.0f, +1.0f), XMFLOAT4(Colors::Yellow) }),
+			Vertex({ XMFLOAT3(+1.0f, +1.0f, +1.0f), XMFLOAT4(Colors::Cyan) }),
+			Vertex({ XMFLOAT3(+1.0f, -1.0f, +1.0f), XMFLOAT4(Colors::Magenta) })
 		};
 
-		std::array<std::uint16_t, 6> indices {
-			0, 2, 1,
-			3, 5, 4
+		std::array<std::uint16_t, 36> indices =
+	{
+			// front face
+			0, 1, 2,
+			0, 2, 3,
+
+			// back face
+			4, 6, 5,
+			4, 7, 6,
+
+			// left face
+			4, 5, 1,
+			4, 1, 0,
+
+			// right face
+			3, 2, 6,
+			3, 6, 7,
+
+			// top face
+			1, 5, 6,
+			1, 6, 2,
+
+			// bottom face
+			4, 0, 3,
+			4, 3, 7
 		};
 		
 

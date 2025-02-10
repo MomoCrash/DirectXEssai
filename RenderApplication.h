@@ -41,17 +41,20 @@ private:
     Camera camera;
     
     TRANSFORM mWorld;
-    TRANSFORM mProj;
+    XMFLOAT4X4 mProj;
 
     XMFLOAT4X4 WorldViewProj;
 
     // App resources.
     ID3D12Resource* mVertexBuffer;
     ID3D12Resource* mIndicesBuffer;
+    
     D3D12_VERTEX_BUFFER_VIEW mVertexBufferView;
     D3D12_INDEX_BUFFER_VIEW mIndicesBufferView;
 
     POINT mLastMousePosition;
     float mYaw = 0.0f;
     float mPitch = 0.0f;
+
+    bool mTurn;
 };

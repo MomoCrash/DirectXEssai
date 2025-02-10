@@ -8,7 +8,7 @@ public:
     ~Camera();
     TRANSFORM mView;
 
-    void Update();
+    void UpdateMatrix();
     TRANSFORM& GetTransform();
     
 };
