@@ -1,6 +1,6 @@
 ﻿#include "RenderObject.h"
 
-RenderItem::RenderItem()
+RenderItem::RenderItem(MeshGeometry* geometry) : Geo(geometry)
 {
-    Maths::Identity4X4(&World);
+    transform.Identity();
 }

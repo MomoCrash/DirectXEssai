@@ -1,7 +1,10 @@
 ﻿#pragma once
+#include <map>
+
 #include "Application.h"
 #include "lib/d3dUtils.h"
 #include "Camera.h"
+#include "RenderObject.h"
 #include "Shader.h"
 #include "Transform.h"
 #include "UploadBuffer.h"
@@ -10,6 +13,10 @@ using namespace DirectX;
 
 class RenderApplication : public Application
 {
+
+    using uint16 = std::uint16_t;
+    using uint32 = std::uint32_t;
+    
 public:
     RenderApplication(HINSTANCE instance);
     
@@ -29,10 +36,14 @@ private:
     void BuildPSO();
     void BuildConstantBuffer();
     void BuildDescriptorHeaps();
-    void CreateTriangle();
+    void CreateMesh();
 
-    UploadBuffer<ObjectConstants>* mObjectCB = nullptr;
+    void GenerateGeometryBuffer(MeshGeometry* geo);
+    void DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems);
 
+    
+    FrameResource* mCurrFrameResource = nullptr;
+    
     ID3D12RootSignature* mRootSignature;
     ID3D12DescriptorHeap* mCbvHeap;
     ID3D12PipelineState* mPSO;
@@ -45,13 +56,16 @@ private:
 
     XMFLOAT4X4 WorldViewProj;
 
-    // App resources.
+    /*// Geometry resources.
     ID3D12Resource* mVertexBuffer;
     ID3D12Resource* mIndicesBuffer;
     
     D3D12_VERTEX_BUFFER_VIEW mVertexBufferView;
-    D3D12_INDEX_BUFFER_VIEW mIndicesBufferView;
+    D3D12_INDEX_BUFFER_VIEW mIndicesBufferView;*/
 
+    RenderItem mRenderItem;
+    UploadBuffer<ObjectConstants>* mObjectCB;
+    
     POINT mLastMousePosition;
     float mYaw = 0.0f;
     float mPitch = 0.0f;

@@ -34,6 +34,8 @@
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
 
+constexpr int gNumFrameResources = 3;
+
 class d3dUtils
 {
 public:

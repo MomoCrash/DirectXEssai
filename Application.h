@@ -18,6 +18,7 @@ public:
     virtual LRESULT InputHandler(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 protected:
+    
     bool InitializeWindow();
     bool InitializeDirectX();
 
