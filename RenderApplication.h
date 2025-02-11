@@ -39,6 +39,7 @@ private:
     void CreateMesh();
 
     void GenerateGeometryBuffer(MeshGeometry* geo);
+    void GenerateTriangle();
     void DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems);
 
     
@@ -56,12 +57,12 @@ private:
 
     XMFLOAT4X4 WorldViewProj;
 
-    /*// Geometry resources.
+    // Geometry resources.
     ID3D12Resource* mVertexBuffer;
     ID3D12Resource* mIndicesBuffer;
     
     D3D12_VERTEX_BUFFER_VIEW mVertexBufferView;
-    D3D12_INDEX_BUFFER_VIEW mIndicesBufferView;*/
+    D3D12_INDEX_BUFFER_VIEW mIndicesBufferView;
 
     RenderItem mRenderItem;
     UploadBuffer<ObjectConstants>* mObjectCB;

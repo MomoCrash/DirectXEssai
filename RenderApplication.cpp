@@ -66,6 +66,7 @@ bool RenderApplication::Initialize()
 			IID_PPV_ARGS(&mRootSignature));
 	}
 
+	GenerateTriangle();
     CreateMesh();
     BuildPSO();
 
@@ -167,22 +168,30 @@ void RenderApplication::Draw()
 	mCommandList->OMSetRenderTargets(1,
 		&rtvHandle, true, &depthHandle);
 
-
-	// ON A TOUT LE PROCESS DE DESSIN A L'ECRAN
+	
 	ID3D12DescriptorHeap* descriptorHeaps[] = { mCbvHeap };
 	mCommandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
 
-	D3D12_VERTEX_BUFFER_VIEW vertexView = mRenderItem.Geo->VertexBufferView();
-	D3D12_INDEX_BUFFER_VIEW indexView = mRenderItem.Geo->IndexBufferView();
+	/*mCommandList->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	mCommandList->IASetVertexBuffers(0, 1, &mVertexBufferView);
+	mCommandList->IASetIndexBuffer(&mIndicesBufferView);
+
+	mCommandList->SetGraphicsRootDescriptorTable(0, mCbvHeap->GetGPUDescriptorHandleForHeapStart());*/
+
+	mCommandList->DrawIndexedInstanced(
+		36, 1, 0, 0, 0);
+
+	D3D12_VERTEX_BUFFER_VIEW vertexView = mRenderItem.meshGeometry->VertexBufferView();
+	D3D12_INDEX_BUFFER_VIEW indexView = mRenderItem.meshGeometry->IndexBufferView();
 
     mCommandList->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     mCommandList->IASetVertexBuffers(0, 1, &vertexView);
     mCommandList->IASetIndexBuffer(&indexView);
 
     mCommandList->SetGraphicsRootDescriptorTable(0, mCbvHeap->GetGPUDescriptorHandleForHeapStart());
-
+	
     mCommandList->DrawIndexedInstanced(
-		mRenderItem.Geo->MeshData.Indices32.size(), 1, 0, 0, 0);
+		36, 1, 0, 0, 0);
 
 	barrier = CD3DX12_RESOURCE_BARRIER::Transition(GetCurrentBackBuffer(),
 		D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
@@ -331,7 +340,7 @@ void RenderApplication::CreateMesh()
 {
 	
 	MeshGeometry* boxGeometry = new MeshGeometry();
-	boxGeometry->MeshData = GeometryFactory::CreateBox(1.5f, 0.5f, 1.5f, 3);
+	boxGeometry->MeshData = GeometryFactory::CreateBox(1.0f, 1.0f, 1.0f, 0);
 
 	GenerateGeometryBuffer(boxGeometry);
 
@@ -347,8 +356,8 @@ void RenderApplication::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, cons
 void RenderApplication::GenerateGeometryBuffer(MeshGeometry* geo)
 {
 
-	const UINT vertexBufferSize = (UINT)geo->MeshData.Vertices.size() * sizeof(Vertex);
-	const UINT indicesBufferSize = (UINT)geo->MeshData.GetIndices16().size()  * sizeof(std::uint16_t);
+	const UINT vertexBufferSize = (UINT)geo->MeshData.Vertices.size() * sizeof(GeometryFactory::Vertex);
+	const UINT indicesBufferSize = (UINT)geo->MeshData.Indices32.size()  * sizeof(uint16);
 
 	// Note: using upload heaps to transfer static data like vert buffers is not 
 	// recommended. Every time the GPU needs it, the upload heap will be marshalled 
@@ -372,7 +381,7 @@ void RenderApplication::GenerateGeometryBuffer(MeshGeometry* geo)
 	geo->VertexBufferGPU->Unmap(0, nullptr);
 
 	// Initialize the vertex buffer view.
-	geo->VertexByteStride = sizeof(Vertex);
+	geo->VertexByteStride = sizeof(GeometryFactory::Vertex);
 	geo->VertexBufferByteSize = vertexBufferSize;
 
 	////////////////////// FOR INDICES ////////////////////////////
@@ -392,11 +401,107 @@ void RenderApplication::GenerateGeometryBuffer(MeshGeometry* geo)
 	// Copy the triangle data to the vertex buffer.
 	UINT8* pIndicesDataBegin;// We do not intend to read from this resource on the CPU.
 	geo->IndexBufferGPU->Map(0, &readRange, reinterpret_cast<void**>(&pIndicesDataBegin));
-	memcpy(pIndicesDataBegin, &geo->MeshData.GetIndices16(), sizeof(uint16));
+	memcpy(pIndicesDataBegin, &geo->MeshData.GetIndices16(), indicesBufferSize);
 	geo->IndexBufferGPU->Unmap(0, nullptr);
 
 	// Initialize the vertex buffer view.
 	geo->IndexFormat = DXGI_FORMAT_R16_UINT;
 	geo->IndexBufferByteSize = indicesBufferSize;
 	
+}
+
+void RenderApplication::GenerateTriangle()
+{
+	std::array<Vertex, 8> vertices {
+		Vertex({ XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT4(Colors::White) }),
+		Vertex({ XMFLOAT3(-1.0f, +1.0f, -1.0f), XMFLOAT4(Colors::Black) }),
+		Vertex({ XMFLOAT3(+1.0f, +1.0f, -1.0f), XMFLOAT4(Colors::Red) }),
+		Vertex({ XMFLOAT3(+1.0f, -1.0f, -1.0f), XMFLOAT4(Colors::Green) }),
+		Vertex({ XMFLOAT3(-1.0f, -1.0f, +1.0f), XMFLOAT4(Colors::Blue) }),
+		Vertex({ XMFLOAT3(-1.0f, +1.0f, +1.0f), XMFLOAT4(Colors::Yellow) }),
+		Vertex({ XMFLOAT3(+1.0f, +1.0f, +1.0f), XMFLOAT4(Colors::Cyan) }),
+		Vertex({ XMFLOAT3(+1.0f, -1.0f, +1.0f), XMFLOAT4(Colors::Magenta) })
+	};
+		
+	std::array<std::uint16_t, 36> indices =
+	{
+		// front face
+		0, 1, 2,
+		0, 2, 3,
+
+		// back face
+		4, 6, 5,
+		4, 7, 6,
+
+		// left face
+		4, 5, 1,
+		4, 1, 0,
+
+		// right face
+		3, 2, 6,
+		3, 6, 7,
+
+		// top face
+		1, 5, 6,
+		1, 6, 2,
+
+		// bottom face
+		4, 0, 3,
+		4, 3, 7
+	};
+	
+
+	const UINT vertexBufferSize = sizeof(vertices);
+	const UINT indicesBufferSize = sizeof(indices);
+
+	// Note: using upload heaps to transfer static data like vert buffers is not 
+	// recommended. Every time the GPU needs it, the upload heap will be marshalled 
+	// over. Please read up on Default Heap usage. An upload heap is used here for 
+	// code simplicity and because there are very few verts to actually transfer.
+	CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_UPLOAD);
+	CD3DX12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
+	mDevice->CreateCommittedResource(
+		&heapProps,
+		D3D12_HEAP_FLAG_NONE,
+		&desc,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
+		nullptr,
+		IID_PPV_ARGS(&mVertexBuffer));
+
+	// Copy the triangle data to the vertex buffer.
+	UINT8* pVertexDataBegin;
+	CD3DX12_RANGE readRange(0, 0);        // We do not intend to read from this resource on the CPU.
+	mVertexBuffer->Map(0, &readRange, reinterpret_cast<void**>(&pVertexDataBegin));
+	memcpy(pVertexDataBegin, &vertices, sizeof(vertices));
+	mVertexBuffer->Unmap(0, nullptr);
+
+	// Initialize the vertex buffer view.
+	mVertexBufferView.BufferLocation = mVertexBuffer->GetGPUVirtualAddress();
+	mVertexBufferView.StrideInBytes = sizeof(Vertex);
+	mVertexBufferView.SizeInBytes = vertexBufferSize;
+
+	////////////////////// FOR INDICES ////////////////////////////
+	
+	// In order to copy CPU memory data into our default buffer, we need to create
+	// an intermediate upload heap.
+	heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+	desc = CD3DX12_RESOURCE_DESC::Buffer(indicesBufferSize);
+	mDevice->CreateCommittedResource(
+		&heapProps,
+		D3D12_HEAP_FLAG_NONE,
+		&desc,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
+		nullptr,
+		IID_PPV_ARGS(&mIndicesBuffer));
+
+	// Copy the triangle data to the vertex buffer.
+	UINT8* pIndicesDataBegin;// We do not intend to read from this resource on the CPU.
+	mIndicesBuffer->Map(0, &readRange, reinterpret_cast<void**>(&pIndicesDataBegin));
+	memcpy(pIndicesDataBegin, &indices, sizeof(indices));
+	mIndicesBuffer->Unmap(0, nullptr);
+	
+	// Initialize the vertex buffer view.
+	mIndicesBufferView.BufferLocation = mIndicesBuffer->GetGPUVirtualAddress();
+	mIndicesBufferView.Format = DXGI_FORMAT_R16_UINT;
+	mIndicesBufferView.SizeInBytes = indicesBufferSize;
 }

@@ -56,7 +56,7 @@ struct RenderItem
     RenderItem(MeshGeometry* geometry);
 
     TRANSFORM transform;
-    MeshGeometry* Geo = nullptr;
+    MeshGeometry* meshGeometry;
 
     // Dirty flag indicating the object data has changed and we need to update the constant buffer.
     // Because we have an object cbuffer for each FrameResource, we have to apply the
