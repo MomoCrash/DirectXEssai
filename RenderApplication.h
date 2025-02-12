@@ -41,7 +41,7 @@ private:
     void GenerateGeometryBuffer(MeshGeometry* geo);
     void GenerateTriangle();
     void DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems);
-
+    ID3D12Resource* CreateBuffer(const void* initData, UINT64 byteSize, ID3D12Resource* uploadBuffer);
     
     FrameResource* mCurrFrameResource = nullptr;
     

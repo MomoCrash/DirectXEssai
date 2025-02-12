@@ -7,8 +7,8 @@ struct TRANSFORM
 private:
     bool mDirty;
 
-    DirectX::XMFLOAT4X4 mMatrix;
     DirectX::XMFLOAT4X4 mRotation;
+    DirectX::XMFLOAT4X4 mMatrix;
 
 public:
     TRANSFORM();

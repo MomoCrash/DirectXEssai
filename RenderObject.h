@@ -7,6 +7,9 @@
 struct MeshGeometry
 {
 
+    ID3DBlob* VertexBufferCPU = nullptr; 
+    ID3DBlob* IndexBufferCPU  = nullptr;
+
     // LE buffer dans le GPU
     ID3D12Resource* VertexBufferGPU = nullptr;
     ID3D12Resource* IndexBufferGPU = nullptr;
