@@ -7,7 +7,7 @@
 RenderApplication::RenderApplication(HINSTANCE instance) : Application(instance), mRootSignature(nullptr),
                                                            mCbvHeap(nullptr), mPSO(nullptr),
                                                            shader(L"shader\\default.hlsl"),
-                                                           WorldViewProj(), mRenderItem(nullptr)
+                                                           WorldViewProj()
 {
 }
 
@@ -24,9 +24,6 @@ bool RenderApplication::Initialize()
 	Application::Initialize();
 
 	mCommandList->Reset(mDirectCmdListAlloc, nullptr);
-
-	BuildDescriptorHeaps();
-	BuildConstantBuffer();
 	
 	// Notre root signature
 	{
@@ -70,6 +67,10 @@ bool RenderApplication::Initialize()
 
 	GenerateTriangle();
     CreateMesh();
+	
+	BuildDescriptorHeaps();
+	BuildConstantBuffer();
+	
     BuildPSO();
 
 	// Execute the initialization commands.
@@ -185,8 +186,8 @@ void RenderApplication::Draw()
 	ID3D12DescriptorHeap* descriptorHeaps[] = { mCbvHeap };
 	mCommandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
 
-	D3D12_VERTEX_BUFFER_VIEW vertexView = mRenderItem.meshGeometry->VertexBufferView();
-	D3D12_INDEX_BUFFER_VIEW indexView = mRenderItem.meshGeometry->IndexBufferView();
+	D3D12_VERTEX_BUFFER_VIEW vertexView = mRendersItems[0]->meshGeometry->VertexBufferView();
+	D3D12_INDEX_BUFFER_VIEW indexView = mRendersItems[0]->meshGeometry->IndexBufferView();
 
     mCommandList->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     mCommandList->IASetVertexBuffers(0, 1, &vertexView);
@@ -195,7 +196,7 @@ void RenderApplication::Draw()
     mCommandList->SetGraphicsRootDescriptorTable(0, mCbvHeap->GetGPUDescriptorHandleForHeapStart());
 	
     mCommandList->DrawIndexedInstanced(
-		mRenderItem.IndexCount, 1, 0, 0, 0);
+		mRendersItems[0]->IndexCount, 1, 0, 0, 0);
 
 	barrier = CD3DX12_RESOURCE_BARRIER::Transition(GetCurrentBackBuffer(),
 		D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
@@ -308,48 +309,88 @@ void RenderApplication::BuildPSO()
 
 void RenderApplication::BuildConstantBuffer()
 {
-	
-	mObjectCB = new UploadBuffer<ObjectConstants>(mDevice, 1, true);
 
+	mPassCB = new UploadBuffer<PassConstants>(mDevice, 1, true);
+	mObjectCB = new UploadBuffer<ObjectConstants>(mDevice, mRendersItems.size(), true);
+	
 	UINT objCBByteSize = d3dUtils::CalcConstantBufferByteSize(sizeof(ObjectConstants));
-
-	D3D12_GPU_VIRTUAL_ADDRESS cbAddress = mObjectCB->Resource()->GetGPUVirtualAddress();
+	UINT objCount = (UINT)mRendersItems.size();
 	
-	// Offset to the ith object constant buffer in the buffer.
-	int boxCBufIndex = 0;
-	cbAddress += boxCBufIndex*objCBByteSize;
+	auto objectCB = mObjectCB->Resource();
+	for(UINT i = 0; i < objCount; ++i)
+	{
+		D3D12_GPU_VIRTUAL_ADDRESS cbAddress = objectCB->GetGPUVirtualAddress();
+		// Offset to the ith object constant buffer in the buffer.
+		cbAddress += i*objCBByteSize;
+
+		// Offset to the object cbv in the descriptor heap.
+		CD3DX12_CPU_DESCRIPTOR_HANDLE cpuHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(mCbvHeap->GetCPUDescriptorHandleForHeapStart());
+		cpuHandle.Offset(i, mCbvSrvUavDescriptorSize);
+
+		D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc;
+		cbvDesc.BufferLocation = cbAddress;
+		cbvDesc.SizeInBytes = objCBByteSize;
+
+		mDevice->CreateConstantBufferView(&cbvDesc, cpuHandle);
+	}
+
+	UINT passCBByteSize = d3dUtils::CalcConstantBufferByteSize(sizeof(PassConstants));
+	auto passCB = mPassCB->Resource();
+	D3D12_GPU_VIRTUAL_ADDRESS cbAddress = passCB->GetGPUVirtualAddress();
+
+	// Offset to the pass cbv in the descriptor heap.
+	int heapIndex = mPassCbvOffset;
+	auto handle = CD3DX12_CPU_DESCRIPTOR_HANDLE(mCbvHeap->GetCPUDescriptorHandleForHeapStart());
+	handle.Offset(heapIndex, mCbvSrvUavDescriptorSize);
 
 	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc;
 	cbvDesc.BufferLocation = cbAddress;
-	cbvDesc.SizeInBytes = d3dUtils::CalcConstantBufferByteSize(sizeof(ObjectConstants));
-
-	mDevice->CreateConstantBufferView(
-		&cbvDesc,
-		mCbvHeap->GetCPUDescriptorHandleForHeapStart());
+	cbvDesc.SizeInBytes = passCBByteSize;
+    
+	mDevice->CreateConstantBufferView(&cbvDesc, handle);
+	
 }
 
 void RenderApplication::BuildDescriptorHeaps()
 {
+	
+	UINT objCount = (UINT)mRendersItems.size();
+
+	// Need a CBV descriptor for each object
+	// +1 for the perPass CBV for each frame resource.
+	UINT numDescriptors = (objCount+1);
+
+	// Save an offset to the start of the pass CBVs.  These are the last 3 descriptors.
+	mPassCbvOffset = objCount;
+
 	D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc;
-	cbvHeapDesc.NumDescriptors = 1;
+	cbvHeapDesc.NumDescriptors = numDescriptors;
 	cbvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 	cbvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 	cbvHeapDesc.NodeMask = 0;
-	HRESULT result = mDevice->CreateDescriptorHeap(&cbvHeapDesc,
+	mDevice->CreateDescriptorHeap(&cbvHeapDesc,
 		IID_PPV_ARGS(&mCbvHeap));
-	if (FAILED(result)) { std::cerr << "Failed to create heap descriptor !\n"; }
 }
 
 void RenderApplication::CreateMesh()
 {
 	
 	MeshGeometry* boxGeometry = new MeshGeometry();
-	boxGeometry->MeshData = GeometryFactory::CreateGeosphere(5.0f, 3);
+	boxGeometry->MeshData = 	GeometryFactory::CreateBox(10.0f, 10.0f, 60, 3);
 
+	UINT objCBIndex = 0;
+	
 	GenerateGeometryBuffer(boxGeometry);
 
-	mRenderItem = RenderItem(boxGeometry);
-	mRenderItem.IndexCount = (UINT)boxGeometry->MeshData.Indices32.size();
+	RenderItem* box = new RenderItem(boxGeometry);
+	box->transform.SetPosition(XMVectorSet(5, 0, 5, 1));
+	box->IndexCount = (UINT)boxGeometry->MeshData.Indices32.size();
+	mRendersItems.push_back(box);
+
+	RenderItem* box1 = new RenderItem(boxGeometry);
+	box1->transform.SetPosition(XMVectorSet(0, 0, 0, 1));
+	box1->IndexCount = (UINT)boxGeometry->MeshData.Indices32.size();
+	mRendersItems.push_back(box1);
 }
 
 void RenderApplication::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems)

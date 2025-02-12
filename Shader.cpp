@@ -1,5 +1,17 @@
 ﻿#include "Shader.h"
 
+PassConstants::PassConstants()
+{
+    
+    Maths::Identity4X4(&View);
+    Maths::Identity4X4(&InvView);
+    Maths::Identity4X4(&Proj);
+    Maths::Identity4X4(&InvProj);
+    Maths::Identity4X4(&ViewProj);
+    Maths::Identity4X4(&InvViewProj);
+    
+}
+
 Shader::Shader(std::wstring path)
 {
     mVertexShader = CompileShader(path, nullptr, "VS", "vs_5_0");

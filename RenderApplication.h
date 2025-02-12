@@ -64,8 +64,12 @@ private:
     D3D12_VERTEX_BUFFER_VIEW mVertexBufferView;
     D3D12_INDEX_BUFFER_VIEW mIndicesBufferView;
 
-    RenderItem mRenderItem;
+    std::vector<RenderItem*> mRendersItems;
+    
     UploadBuffer<ObjectConstants>* mObjectCB;
+    UploadBuffer<PassConstants>* mPassCB;
+    
+    UINT mPassCbvOffset = 0;
     
     POINT mLastMousePosition;
     float mYaw = 0.0f;
