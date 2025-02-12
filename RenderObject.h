@@ -59,6 +59,8 @@ struct RenderItem
     RenderItem(MeshGeometry* geometry);
 
     TRANSFORM transform;
+    DirectX::XMFLOAT4 Color;
+    
     MeshGeometry* meshGeometry;
 
     // Dirty flag indicating the object data has changed and we need to update the constant buffer.

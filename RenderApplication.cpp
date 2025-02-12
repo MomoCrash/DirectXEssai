@@ -6,18 +6,24 @@
 
 RenderApplication::RenderApplication(HINSTANCE instance) : Application(instance), mRootSignature(nullptr),
                                                            mCbvHeap(nullptr), mPSO(nullptr),
-                                                           shader(L"shader\\default.hlsl"),
-                                                           WorldViewProj()
+                                                           shader(L"shader\\default.hlsl"), mProj(),
+                                                           mVertexBuffer(nullptr),
+                                                           mIndicesBuffer(nullptr),
+                                                           mVertexBufferView(),
+                                                           mIndicesBufferView(),
+                                                           mObjectCB(nullptr),
+                                                           mPassCB(nullptr),
+                                                           mLastMousePosition(),
+                                                           mTurn(false)
 {
 }
 
 bool RenderApplication::Initialize()
 {
-    
-    mWorld.Identity();
+	
     camera = Camera();
 
-	XMVECTOR finalPosition = XMVectorSet(0.0f, 0.0f, -7.0f, 1.0f);
+	XMVECTOR finalPosition = XMVectorSet(0.0f, 0.0f, -1.0f, 1.0f);
 	camera.GetTransform().SetPosition(finalPosition);
 	camera.GetTransform().Rotate(0.0f, 0.0f, 0.0f);
 
@@ -135,23 +141,14 @@ void RenderApplication::Update()
 	std::cout << "x. " << camera.GetTransform().position.x << " y." << camera.GetTransform().position.y << " z." << camera.GetTransform().position.z << std::endl;
 	std::cout << "x. " << camera.GetTransform().forward.x << " y." << camera.GetTransform().forward.y << " z." << camera.GetTransform().forward.z << std::endl;
 	
-	mWorld.UpdateMatrix();
 	camera.UpdateMatrix();
 
 	// Merci Zian <3
 	XMMATRIX cameraView = camera.GetTransform().GetMatrix();
 	cameraView = XMMatrixInverse(nullptr, cameraView);
 	
-	XMMATRIX worldViewProj = mWorld.GetMatrix() * cameraView * XMLoadFloat4x4(&mProj);
-    XMStoreFloat4x4(&WorldViewProj, worldViewProj);
-	
 	UpdatePassBC();
 	UpdatePerObjectBC();
-	
-	// Update the constant buffer with the latest worldViewProj matrix.
-	/*ObjectConstants objConstants;
-	XMStoreFloat4x4(&objConstants.WorldViewProj, XMMatrixTranspose(worldViewProj));
-	mObjectCB->CopyData(0, objConstants);*/
     
 }
 
@@ -187,6 +184,11 @@ void RenderApplication::Draw()
 	
 	ID3D12DescriptorHeap* descriptorHeaps[] = { mCbvHeap };
 	mCommandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
+
+	int passCbvIndex = mPassCbvOffset;
+	auto passCbvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
+	passCbvHandle.Offset(passCbvIndex, mCbvSrvUavDescriptorSize);
+	mCommandList->SetGraphicsRootDescriptorTable(1, passCbvHandle);
 
 	DrawRenderItems();
 
@@ -266,6 +268,7 @@ void RenderApplication::UpdatePassBC()
 	PassConstants mMainPassCB;
 	
 	XMMATRIX view = camera.GetTransform().GetMatrix();
+	view = XMMatrixInverse(nullptr, view);
 	XMMATRIX proj = XMLoadFloat4x4(&mProj);
 
 	XMMATRIX viewProj = XMMatrixMultiply(view, proj);
@@ -297,11 +300,16 @@ void RenderApplication::UpdatePerObjectBC()
 {
 	for(auto& e : mRendersItems)
 	{
+
+		e->transform.UpdateMatrix();
+		
 		XMMATRIX world = e->transform.GetMatrix();
 
 		ObjectConstants objConstants;
+		
 		XMStoreFloat4x4(&objConstants.World, XMMatrixTranspose(world));
-
+		objConstants.Color = e->Color;
+		
 		mObjectCB->CopyData(e->ObjCBIndex, objConstants);
 		
 	}
@@ -333,7 +341,6 @@ void RenderApplication::BuildPSO()
 		shader.GetPixelShader()->GetBufferSize() 
 	};
 	psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-	psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
 	psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
 	psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
 	psoDesc.SampleMask = UINT_MAX;
@@ -344,6 +351,10 @@ void RenderApplication::BuildPSO()
 	psoDesc.SampleDesc.Quality = m4xMsaaState ? (m4xMsaaQuality - 1) : 0;
 	psoDesc.DSVFormat = mDepthStencilFormat;
 	HRESULT result = mDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mPSO));
+
+	// Le shaders qui a des CONSTANT BUFFER pas pris en compte dans la signature
+	// ou dans le mInputLayout du Shader
+	
 	if (FAILED(result)) { std::cerr << "Failed to create render pipeline !\n"; }
 }
 
@@ -378,7 +389,7 @@ void RenderApplication::BuildConstantBuffer()
 	auto passCB = mPassCB->Resource();
 	D3D12_GPU_VIRTUAL_ADDRESS cbAddress = passCB->GetGPUVirtualAddress();
 
-	// Offset to the pass cbv in the descriptor heap.
+	// Offset to the pass cbv in the descriptor heap
 	int heapIndex = mPassCbvOffset;
 	auto handle = CD3DX12_CPU_DESCRIPTOR_HANDLE(mCbvHeap->GetCPUDescriptorHandleForHeapStart());
 	handle.Offset(heapIndex, mCbvSrvUavDescriptorSize);
@@ -393,14 +404,12 @@ void RenderApplication::BuildConstantBuffer()
 
 void RenderApplication::BuildDescriptorHeaps()
 {
-	
 	UINT objCount = (UINT)mRendersItems.size();
 
 	// Need a CBV descriptor for each object
-	// +1 for the perPass CBV for each frame resource.
 	UINT numDescriptors = (objCount+1);
 
-	// Save an offset to the start of the pass CBVs.  These are the last 3 descriptors.
+	// Save an offset to the start of the pass CBVs.
 	mPassCbvOffset = objCount;
 
 	D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc;
@@ -416,23 +425,39 @@ void RenderApplication::CreateMesh()
 {
 	
 	MeshGeometry* boxGeometry = new MeshGeometry();
-	boxGeometry->MeshData = 	GeometryFactory::CreateBox(10.0f, 10.0f, 60, 3);
+	boxGeometry->MeshData = GeometryFactory::CreateBox(1.0f, 1.0f, 1.0f, 3);
+
+	MeshGeometry* circleGeometry = new MeshGeometry();
+	circleGeometry->MeshData = GeometryFactory::CreateGeosphere(2.0f, 5.0f);
 
 	UINT objCBIndex = 0;
 	
 	GenerateGeometryBuffer(boxGeometry);
+	GenerateGeometryBuffer(circleGeometry);
 
 	RenderItem* box = new RenderItem(boxGeometry);
-	box->transform.SetPosition(XMVectorSet(5, 0, 5, 1));
+	box->transform.SetPosition(XMVectorSet(5, 0, 1.0f, 1));
+	XMStoreFloat4(&box->Color, XMVectorSet(0.0f, 0.0f, 1.0f, 1.0f));
 	box->IndexCount = (UINT)boxGeometry->MeshData.Indices32.size();
+	box->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 	box->ObjCBIndex = objCBIndex++;
 	mRendersItems.push_back(box);
 
 	RenderItem* box1 = new RenderItem(boxGeometry);
 	box1->transform.SetPosition(XMVectorSet(0, 0, 0, 1));
+	XMStoreFloat4(&box1->Color, XMVectorSet(0.0f, 1.0f, 0.0f, 1.0f));
 	box1->IndexCount = (UINT)boxGeometry->MeshData.Indices32.size();
+	box1->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 	box1->ObjCBIndex = objCBIndex++;
 	mRendersItems.push_back(box1);
+
+	RenderItem* circle = new RenderItem(circleGeometry);
+	circle->transform.SetPosition(XMVectorSet(10, 0, 0, 1));
+	XMStoreFloat4(&circle->Color, XMVectorSet(1.0f, 0.0f, 0.0f, 1.0f));
+	circle->IndexCount = (UINT)circleGeometry->MeshData.Indices32.size();
+	circle->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+	circle->ObjCBIndex = objCBIndex++;
+	mRendersItems.push_back(circle);
 }
 
 void RenderApplication::DrawRenderItems()
@@ -509,7 +534,7 @@ void RenderApplication::GenerateGeometryBuffer(MeshGeometry* geo)
 	const UINT vbByteSize = (UINT)vertex->size() * sizeof(GeometryFactory::Vertex);
 	const UINT ibByteSize = (UINT)index.size() * sizeof(std::uint16_t);
 
-	////////////////////// FOR VERTEX ////////////////////////
+	// Emplacement memoir CPU
 	D3DCreateBlob(vbByteSize, &geo->VertexBufferCPU);
 	CopyMemory(geo->VertexBufferCPU->GetBufferPointer(), vertex->data(), vbByteSize);
 
@@ -518,16 +543,15 @@ void RenderApplication::GenerateGeometryBuffer(MeshGeometry* geo)
 
 	// Copy the triangle data to the vertex buffer.
 	geo->VertexBufferGPU = CreateBuffer(vertex->data(), vbByteSize, geo->VertexBufferUploader);
-
-	////////////////////// FOR INDICES ////////////////////////
-	// Copy the triangle data to the vertex buffer.
+	
+	// Copy the triangle data to the indices buffer.
 	geo->IndexBufferGPU = CreateBuffer(index.data(), ibByteSize, geo->IndexBufferUploader);
 
 	// Initialize the vertex buffer view.
 	geo->VertexByteStride = sizeof(GeometryFactory::Vertex);
 	geo->VertexBufferByteSize = vbByteSize;
 	
-	// Initialize the vertex buffer view.
+	// Initialize the indices buffer view.
 	geo->IndexFormat = DXGI_FORMAT_R16_UINT;
 	geo->IndexBufferByteSize = ibByteSize;
 	
@@ -573,7 +597,6 @@ void RenderApplication::GenerateTriangle()
 		4, 3, 7
 	};
 	
-
 	const UINT vertexBufferSize = sizeof(vertices);
 	const UINT indicesBufferSize = sizeof(indices);
 

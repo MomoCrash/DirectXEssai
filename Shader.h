@@ -38,6 +38,7 @@ struct PassConstants
 struct ObjectConstants
 {
     XMFLOAT4X4 World;
+    XMFLOAT4 Color;
 };
 
 class Shader

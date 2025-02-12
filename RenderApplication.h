@@ -53,10 +53,7 @@ private:
     Shader shader;
     Camera camera;
     
-    TRANSFORM mWorld;
     XMFLOAT4X4 mProj;
-
-    XMFLOAT4X4 WorldViewProj;
 
     // Geometry resources.
     ID3D12Resource* mVertexBuffer;

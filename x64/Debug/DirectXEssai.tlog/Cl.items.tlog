@@ -3,7 +3,9 @@ C:\Users\momo1\RiderProjects\DirectXEssai\lib\d3dUtils.cpp;C:\Users\momo1\RiderP
 C:\Users\momo1\RiderProjects\DirectXEssai\DirectXEssai.cpp;C:\Users\momo1\RiderProjects\DirectXEssai\x64\Debug\DirectXEssai.obj
 C:\Users\momo1\RiderProjects\DirectXEssai\Application.cpp;C:\Users\momo1\RiderProjects\DirectXEssai\x64\Debug\Application.obj
 C:\Users\momo1\RiderProjects\DirectXEssai\lib\GameTimer.cpp;C:\Users\momo1\RiderProjects\DirectXEssai\x64\Debug\GameTimer.obj
+C:\Users\momo1\RiderProjects\DirectXEssai\lib\GeometryFactory.cpp;C:\Users\momo1\RiderProjects\DirectXEssai\x64\Debug\GeometryFactory.obj
 C:\Users\momo1\RiderProjects\DirectXEssai\lib\Maths.cpp;C:\Users\momo1\RiderProjects\DirectXEssai\x64\Debug\Maths.obj
+C:\Users\momo1\RiderProjects\DirectXEssai\RenderObject.cpp;C:\Users\momo1\RiderProjects\DirectXEssai\x64\Debug\RenderObject.obj
 C:\Users\momo1\RiderProjects\DirectXEssai\Shader.cpp;C:\Users\momo1\RiderProjects\DirectXEssai\x64\Debug\Shader.obj
 C:\Users\momo1\RiderProjects\DirectXEssai\RenderApplication.cpp;C:\Users\momo1\RiderProjects\DirectXEssai\x64\Debug\RenderApplication.obj
 C:\Users\momo1\RiderProjects\DirectXEssai\Transform.cpp;C:\Users\momo1\RiderProjects\DirectXEssai\x64\Debug\Transform.obj
