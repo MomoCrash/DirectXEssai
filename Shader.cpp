@@ -14,8 +14,8 @@ PassConstants::PassConstants()
 
 Shader::Shader(std::wstring path)
 {
-    mVertexShader = CompileShader(path, nullptr, "VS", "vs_5_0");
-    mPixelShader = CompileShader(path, nullptr, "PS", "ps_5_0");
+    mVertexShader = CompileShader(path, nullptr, "VS", "vs_5_1");
+    mPixelShader = CompileShader(path, nullptr, "PS", "ps_5_1");
 
     mInputLayout =
     {

@@ -37,29 +37,7 @@ struct PassConstants
 // C'est les constante pour chaque objet individuel
 struct ObjectConstants
 {
-    XMFLOAT4X4 WorldViewProj;
-};
-
-// Stores the resources needed for the CPU to build the command lists
-// for a frame.  
-struct FrameResource
-{
-public:
-    
-    FrameResource(ID3D12Device* device, UINT passCount, UINT objectCount);
-    FrameResource(const FrameResource& rhs) = delete;
-    FrameResource& operator=(const FrameResource& rhs) = delete;
-    ~FrameResource();
-
-    // We cannot reset the allocator until the GPU is done processing the commands.
-    // So each frame needs their own allocator.
-    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> CmdListAlloc;
-
-    // We cannot update a cbuffer until the GPU is done processing the commands
-    // that reference it.  So each frame needs their own cbuffers.
-    std::unique_ptr<UploadBuffer<ObjectConstants>> ObjectCB = nullptr;
-
-    UINT64 Fence = 0;
+    XMFLOAT4X4 World;
 };
 
 class Shader

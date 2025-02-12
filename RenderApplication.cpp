@@ -27,24 +27,24 @@ bool RenderApplication::Initialize()
 	
 	// Notre root signature
 	{
-    	// Shader programs typically require resources as input (constant buffers,
-    	// textures, samplers).  The root signature defines the resources the shader
-    	// programs expect.  If we think of the shader programs as a function, and
-    	// the input resources as function parameters, then the root signature can be
-    	// thought of as defining the function signature.  
+    	CD3DX12_DESCRIPTOR_RANGE cbvTable0;
+    	cbvTable0.Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0);
+
+    	CD3DX12_DESCRIPTOR_RANGE cbvTable1;
+    	cbvTable1.Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 1);
 
     	// Root parameter can be a table, root descriptor or root constants.
-    	CD3DX12_ROOT_PARAMETER slotRootParameter[1];
-
-    	// Create a single descriptor table of CBVs.
-    	CD3DX12_DESCRIPTOR_RANGE cbvTable;
-    	cbvTable.Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0);
-    	slotRootParameter[0].InitAsDescriptorTable(1, &cbvTable);
+    	CD3DX12_ROOT_PARAMETER slotRootParameter[2];
+    	
+    	// Create root CBVs.
+    	slotRootParameter[0].InitAsDescriptorTable(1, &cbvTable0);
+    	slotRootParameter[1].InitAsDescriptorTable(1, &cbvTable1);
 
     	// A root signature is an array of root parameters.
-    	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(1, slotRootParameter, 0, nullptr, 
+    	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(2, slotRootParameter, 0, nullptr, 
 			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
+    	
     	// create a root signature with a single slot which points to a descriptor range consisting of a single constant buffer
     	ID3DBlob* serializedRootSig = nullptr;
     	ID3DBlob* errorBlob = nullptr;
@@ -134,8 +134,7 @@ void RenderApplication::Update()
 
 	std::cout << "x. " << camera.GetTransform().position.x << " y." << camera.GetTransform().position.y << " z." << camera.GetTransform().position.z << std::endl;
 	std::cout << "x. " << camera.GetTransform().forward.x << " y." << camera.GetTransform().forward.y << " z." << camera.GetTransform().forward.z << std::endl;
-
-
+	
 	mWorld.UpdateMatrix();
 	camera.UpdateMatrix();
 
@@ -145,11 +144,14 @@ void RenderApplication::Update()
 	
 	XMMATRIX worldViewProj = mWorld.GetMatrix() * cameraView * XMLoadFloat4x4(&mProj);
     XMStoreFloat4x4(&WorldViewProj, worldViewProj);
-
+	
+	UpdatePassBC();
+	UpdatePerObjectBC();
+	
 	// Update the constant buffer with the latest worldViewProj matrix.
-	ObjectConstants objConstants;
+	/*ObjectConstants objConstants;
 	XMStoreFloat4x4(&objConstants.WorldViewProj, XMMatrixTranspose(worldViewProj));
-	mObjectCB->CopyData(0, objConstants);
+	mObjectCB->CopyData(0, objConstants);*/
     
 }
 
@@ -186,17 +188,7 @@ void RenderApplication::Draw()
 	ID3D12DescriptorHeap* descriptorHeaps[] = { mCbvHeap };
 	mCommandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
 
-	D3D12_VERTEX_BUFFER_VIEW vertexView = mRendersItems[0]->meshGeometry->VertexBufferView();
-	D3D12_INDEX_BUFFER_VIEW indexView = mRendersItems[0]->meshGeometry->IndexBufferView();
-
-    mCommandList->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    mCommandList->IASetVertexBuffers(0, 1, &vertexView);
-    mCommandList->IASetIndexBuffer(&indexView);
-
-    mCommandList->SetGraphicsRootDescriptorTable(0, mCbvHeap->GetGPUDescriptorHandleForHeapStart());
-	
-    mCommandList->DrawIndexedInstanced(
-		mRendersItems[0]->IndexCount, 1, 0, 0, 0);
+	DrawRenderItems();
 
 	barrier = CD3DX12_RESOURCE_BARRIER::Transition(GetCurrentBackBuffer(),
 		D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
@@ -268,6 +260,53 @@ void RenderApplication::OnKeyPressed(WPARAM btnState, int x, int y)
 	
 }
 
+void RenderApplication::UpdatePassBC()
+{
+
+	PassConstants mMainPassCB;
+	
+	XMMATRIX view = camera.GetTransform().GetMatrix();
+	XMMATRIX proj = XMLoadFloat4x4(&mProj);
+
+	XMMATRIX viewProj = XMMatrixMultiply(view, proj);
+	XMVECTOR viewDet = XMMatrixDeterminant(view);
+	XMVECTOR projDet = XMMatrixDeterminant(viewProj);
+	XMVECTOR viewProjDet = XMMatrixDeterminant(proj);
+	XMMATRIX invView = XMMatrixInverse(&viewDet, view);
+	XMMATRIX invProj = XMMatrixInverse(&projDet, proj);
+	XMMATRIX invViewProj = XMMatrixInverse(&viewProjDet, viewProj);
+
+	XMStoreFloat4x4(&mMainPassCB.View, XMMatrixTranspose(view));
+	XMStoreFloat4x4(&mMainPassCB.InvView, XMMatrixTranspose(invView));
+	XMStoreFloat4x4(&mMainPassCB.Proj, XMMatrixTranspose(proj));
+	XMStoreFloat4x4(&mMainPassCB.InvProj, XMMatrixTranspose(invProj));
+	XMStoreFloat4x4(&mMainPassCB.ViewProj, XMMatrixTranspose(viewProj));
+	XMStoreFloat4x4(&mMainPassCB.InvViewProj, XMMatrixTranspose(invViewProj));
+	mMainPassCB.EyePosW = camera.mView.position;
+	mMainPassCB.RenderTargetSize = XMFLOAT2((float)mClientWidth, (float)mClientHeight);
+	mMainPassCB.InvRenderTargetSize = XMFLOAT2(1.0f / mClientWidth, 1.0f / mClientHeight);
+	mMainPassCB.NearZ = 1.0f;
+	mMainPassCB.FarZ = 1000.0f;
+	mMainPassCB.TotalTime = mTimer.TotalTime();
+	mMainPassCB.DeltaTime = mTimer.DeltaTime();
+	
+	mPassCB->CopyData(0, mMainPassCB);
+}
+
+void RenderApplication::UpdatePerObjectBC()
+{
+	for(auto& e : mRendersItems)
+	{
+		XMMATRIX world = e->transform.GetMatrix();
+
+		ObjectConstants objConstants;
+		XMStoreFloat4x4(&objConstants.World, XMMatrixTranspose(world));
+
+		mObjectCB->CopyData(e->ObjCBIndex, objConstants);
+		
+	}
+}
+
 void RenderApplication::OnResize()
 {
     Application::OnResize();
@@ -294,6 +333,7 @@ void RenderApplication::BuildPSO()
 		shader.GetPixelShader()->GetBufferSize() 
 	};
 	psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+	psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
 	psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
 	psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
 	psoDesc.SampleMask = UINT_MAX;
@@ -385,17 +425,40 @@ void RenderApplication::CreateMesh()
 	RenderItem* box = new RenderItem(boxGeometry);
 	box->transform.SetPosition(XMVectorSet(5, 0, 5, 1));
 	box->IndexCount = (UINT)boxGeometry->MeshData.Indices32.size();
+	box->ObjCBIndex = objCBIndex++;
 	mRendersItems.push_back(box);
 
 	RenderItem* box1 = new RenderItem(boxGeometry);
 	box1->transform.SetPosition(XMVectorSet(0, 0, 0, 1));
 	box1->IndexCount = (UINT)boxGeometry->MeshData.Indices32.size();
+	box1->ObjCBIndex = objCBIndex++;
 	mRendersItems.push_back(box1);
 }
 
-void RenderApplication::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems)
+void RenderApplication::DrawRenderItems()
 {
 
+	// For each render item...
+	for(size_t i = 0; i < mRendersItems.size(); ++i)
+	{
+		auto ri = mRendersItems[i];
+
+		D3D12_VERTEX_BUFFER_VIEW vertexView = ri->meshGeometry->VertexBufferView();
+		D3D12_INDEX_BUFFER_VIEW indexView = ri->meshGeometry->IndexBufferView();
+		mCommandList->IASetVertexBuffers(0, 1, &vertexView);
+		mCommandList->IASetIndexBuffer(&indexView);
+		mCommandList->IASetPrimitiveTopology(ri->PrimitiveType);
+
+		// Offset to the CBV in the descriptor heap for this object and for this frame resource.
+		UINT cbvIndex = ri->ObjCBIndex;
+		auto cbvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
+		cbvHandle.Offset(cbvIndex, mCbvSrvUavDescriptorSize);
+
+		mCommandList->SetGraphicsRootDescriptorTable(0, cbvHandle);
+
+		mCommandList->DrawIndexedInstanced(ri->IndexCount, 1, ri->StartIndexLocation, ri->BaseVertexLocation, 0);
+	}
+	
 }
 
 ID3D12Resource* RenderApplication::CreateBuffer(const void* initData, UINT64 byteSize, ID3D12Resource* uploadBuffer)

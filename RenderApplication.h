@@ -30,6 +30,9 @@ private:
     void OnMouseUp(WPARAM btnState, int x, int y) override;
     void OnMouseMove(WPARAM btnState, int x, int y) override;
     void OnKeyPressed(WPARAM btnState, int x, int y) override;
+
+    void UpdatePassBC();
+    void UpdatePerObjectBC();
     
     void OnResize() override;
 
@@ -40,10 +43,8 @@ private:
 
     void GenerateGeometryBuffer(MeshGeometry* geo);
     void GenerateTriangle();
-    void DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems);
+    void DrawRenderItems();
     ID3D12Resource* CreateBuffer(const void* initData, UINT64 byteSize, ID3D12Resource* uploadBuffer);
-    
-    FrameResource* mCurrFrameResource = nullptr;
     
     ID3D12RootSignature* mRootSignature;
     ID3D12DescriptorHeap* mCbvHeap;

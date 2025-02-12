@@ -43,7 +43,7 @@ bool Application::Initialize()
 		return false;
 	}
 
-	Maths::Identity4X4(&WVP.WorldViewProj);
+	Maths::Identity4X4(&WVP.World);
 
 	// Call this for update the current frame data
 	OnResize();
