@@ -4,6 +4,7 @@
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE prevInstance, PSTR cmdLine, int showCmd)
 {
+	
 	RenderApplication window = RenderApplication(hInstance);
 
 	if (!window.Initialize())

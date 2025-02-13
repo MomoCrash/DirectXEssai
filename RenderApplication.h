@@ -8,6 +8,7 @@
 #include "Shader.h"
 #include "Transform.h"
 #include "UploadBuffer.h"
+#include "lib/GeometryFactory.h"
 
 using namespace DirectX;
 
@@ -31,20 +32,19 @@ private:
     void OnMouseMove(WPARAM btnState, int x, int y) override;
     void OnKeyPressed(WPARAM btnState, int x, int y) override;
 
-    void UpdatePassBC();
-    void UpdatePerObjectBC();
+    void UpdatePassBC(); // Used as global update for global world data
+    void UpdatePerObjectBC(); // Used as update for each object
     
     void OnResize() override;
 
+    void BuildRenderableItem(); // Add RenderItem who will be used
+    void BuildDescriptorHeaps(); // Build RenderItem & Pass descriptor
+    void BuildConstantBuffer(); // Build Constant Buffer for Pass & perObject
     void BuildPSO();
-    void BuildConstantBuffer();
-    void BuildDescriptorHeaps();
-    void CreateMesh();
 
-    void GenerateGeometryBuffer(MeshGeometry* geo);
-    void GenerateTriangle();
     void DrawRenderItems();
-    ID3D12Resource* CreateBuffer(const void* initData, UINT64 byteSize, ID3D12Resource* uploadBuffer);
+
+    GeometryFactory* mFactory;
     
     ID3D12RootSignature* mRootSignature;
     ID3D12DescriptorHeap* mCbvHeap;
@@ -52,15 +52,7 @@ private:
     
     Shader shader;
     Camera camera;
-    
     XMFLOAT4X4 mProj;
-
-    // Geometry resources.
-    ID3D12Resource* mVertexBuffer;
-    ID3D12Resource* mIndicesBuffer;
-    
-    D3D12_VERTEX_BUFFER_VIEW mVertexBufferView;
-    D3D12_INDEX_BUFFER_VIEW mIndicesBufferView;
 
     std::vector<RenderItem*> mRendersItems;
     

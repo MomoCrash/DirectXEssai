@@ -6,12 +6,6 @@
 
 using namespace DirectX;
 
-struct Vertex
-{
-    XMFLOAT3 Pos;
-    XMFLOAT4 Color;
-};
-
 // C'est les constantes globales du monde pour chaque frame
 // Y'a tout les parametres du livre mais c'est pas forcement tout utile
 struct PassConstants

@@ -4,10 +4,17 @@
 
 #include "GeometryFactory.h"
 #include <algorithm>
+#include "d3dUtils.h"
 
 using namespace DirectX;
 
-GeometryFactory::MeshData GeometryFactory::CreateBox(float width, float height, float depth, uint32 numSubdivisions)
+GeometryFactory::GeometryFactory(ID3D12Device* pDevice, ID3D12GraphicsCommandList* pCommandList)
+{
+	mpDevice = pDevice;
+	mpCommandList = pCommandList;
+}
+
+RenderMesh* GeometryFactory::CreateBox(float width, float height, float depth, uint32 numSubdivisions)
 {
     MeshData meshData;
 
@@ -97,10 +104,14 @@ GeometryFactory::MeshData GeometryFactory::CreateBox(float width, float height, 
     for(uint32 i = 0; i < numSubdivisions; ++i)
         Subdivide(meshData);
 
-    return meshData;
+	RenderMesh* geometry = new RenderMesh();
+	geometry->MeshData = meshData;
+	GenerateGeometryBuffer(geometry);
+
+	return geometry;
 }
 
-GeometryFactory::MeshData GeometryFactory::CreateSphere(float radius, uint32 sliceCount, uint32 stackCount)
+RenderMesh* GeometryFactory::CreateSphere(float radius, uint32 sliceCount, uint32 stackCount)
 {
     MeshData meshData;
 
@@ -208,103 +219,14 @@ GeometryFactory::MeshData GeometryFactory::CreateSphere(float radius, uint32 sli
 		meshData.Indices32.push_back(baseIndex+i+1);
 	}
 
-    return meshData;
-}
- 
-void GeometryFactory::Subdivide(MeshData& meshData)
-{
-	// Save a copy of the input geometry.
-	MeshData inputCopy = meshData;
+	RenderMesh* geometry = new RenderMesh();
+	geometry->MeshData = meshData;
+	GenerateGeometryBuffer(geometry);
 
-
-	meshData.Vertices.resize(0);
-	meshData.Indices32.resize(0);
-
-	//       v1
-	//       *
-	//      / \
-	//     /   \
-	//  m0*-----*m1
-	//   / \   / \
-	//  /   \ /   \
-	// *-----*-----*
-	// v0    m2     v2
-
-	uint32 numTris = (uint32)inputCopy.Indices32.size()/3;
-	for(uint32 i = 0; i < numTris; ++i)
-	{
-		Vertex v0 = inputCopy.Vertices[ inputCopy.Indices32[i*3+0] ];
-		Vertex v1 = inputCopy.Vertices[ inputCopy.Indices32[i*3+1] ];
-		Vertex v2 = inputCopy.Vertices[ inputCopy.Indices32[i*3+2] ];
-
-		//
-		// Generate the midpoints.
-		//
-
-        Vertex m0 = MidPoint(v0, v1);
-        Vertex m1 = MidPoint(v1, v2);
-        Vertex m2 = MidPoint(v0, v2);
-
-		//
-		// Add new geometry.
-		//
-
-		meshData.Vertices.push_back(v0); // 0
-		meshData.Vertices.push_back(v1); // 1
-		meshData.Vertices.push_back(v2); // 2
-		meshData.Vertices.push_back(m0); // 3
-		meshData.Vertices.push_back(m1); // 4
-		meshData.Vertices.push_back(m2); // 5
- 
-		meshData.Indices32.push_back(i*6+0);
-		meshData.Indices32.push_back(i*6+3);
-		meshData.Indices32.push_back(i*6+5);
-
-		meshData.Indices32.push_back(i*6+3);
-		meshData.Indices32.push_back(i*6+4);
-		meshData.Indices32.push_back(i*6+5);
-
-		meshData.Indices32.push_back(i*6+5);
-		meshData.Indices32.push_back(i*6+4);
-		meshData.Indices32.push_back(i*6+2);
-
-		meshData.Indices32.push_back(i*6+3);
-		meshData.Indices32.push_back(i*6+1);
-		meshData.Indices32.push_back(i*6+4);
-	}
+	return geometry;
 }
 
-GeometryFactory::Vertex GeometryFactory::MidPoint(const Vertex& v0, const Vertex& v1)
-{
-    XMVECTOR p0 = XMLoadFloat3(&v0.Position);
-    XMVECTOR p1 = XMLoadFloat3(&v1.Position);
-
-    XMVECTOR n0 = XMLoadFloat3(&v0.Normal);
-    XMVECTOR n1 = XMLoadFloat3(&v1.Normal);
-
-    XMVECTOR tan0 = XMLoadFloat3(&v0.TangentU);
-    XMVECTOR tan1 = XMLoadFloat3(&v1.TangentU);
-
-    XMVECTOR tex0 = XMLoadFloat2(&v0.TexC);
-    XMVECTOR tex1 = XMLoadFloat2(&v1.TexC);
-
-    // Compute the midpoints of all the attributes.  Vectors need to be normalized
-    // since linear interpolating can make them not unit length.  
-    XMVECTOR pos = 0.5f*(p0 + p1);
-    XMVECTOR normal = XMVector3Normalize(0.5f*(n0 + n1));
-    XMVECTOR tangent = XMVector3Normalize(0.5f*(tan0+tan1));
-    XMVECTOR tex = 0.5f*(tex0 + tex1);
-
-    Vertex v;
-    XMStoreFloat3(&v.Position, pos);
-    XMStoreFloat3(&v.Normal, normal);
-    XMStoreFloat3(&v.TangentU, tangent);
-    XMStoreFloat2(&v.TexC, tex);
-
-    return v;
-}
-
-GeometryFactory::MeshData GeometryFactory::CreateGeosphere(float radius, uint32 numSubdivisions)
+RenderMesh* GeometryFactory::CreateGeosphere(float radius, uint32 numSubdivisions)
 {
     MeshData meshData;
 
@@ -376,10 +298,14 @@ GeometryFactory::MeshData GeometryFactory::CreateGeosphere(float radius, uint32 
 		XMStoreFloat3(&meshData.Vertices[i].TangentU, XMVector3Normalize(T));
 	}
 
-    return meshData;
+	RenderMesh* geometry = new RenderMesh();
+	geometry->MeshData = meshData;
+	GenerateGeometryBuffer(geometry);
+
+	return geometry;
 }
 
-GeometryFactory::MeshData GeometryFactory::CreateGrid(float width, float depth, uint32 m, uint32 n)
+RenderMesh* GeometryFactory::CreateGrid(float width, float depth, uint32 m, uint32 n)
 {
     MeshData meshData;
 
@@ -441,10 +367,14 @@ GeometryFactory::MeshData GeometryFactory::CreateGrid(float width, float depth, 
 		}
 	}
 
-    return meshData;
+	RenderMesh* geometry = new RenderMesh();
+	geometry->MeshData = meshData;
+	GenerateGeometryBuffer(geometry);
+
+	return geometry;
 }
 
-GeometryFactory::MeshData GeometryFactory::CreateQuad(float x, float y, float w, float h, float depth)
+RenderMesh* GeometryFactory::CreateQuad(float x, float y, float w, float h, float depth)
 {
     MeshData meshData;
 
@@ -484,5 +414,183 @@ GeometryFactory::MeshData GeometryFactory::CreateQuad(float x, float y, float w,
 	meshData.Indices32[4] = 2;
 	meshData.Indices32[5] = 3;
 
-    return meshData;
+	RenderMesh* geometry = new RenderMesh();
+    geometry->MeshData = meshData;
+    GenerateGeometryBuffer(geometry);
+
+    return geometry;
+}
+
+RenderMesh* GeometryFactory::LoadGeometryFromFile(std::string path)
+{
+
+	MeshData data;
+	
+	std::fstream meshFile;
+	meshFile.open(path, std::ios::in);
+	
+	for(std::string line; std::getline(meshFile, line); )   //read stream line by line
+	{
+		std::istringstream in(line);      //make a stream for the line itself
+
+		std::string type;
+		in >> type;                  //and read the first whitespace-separated token
+
+		if(type == "v")       //and check its value
+		{
+			float x, y, z;
+			//now read the whitespace-separated floats
+			in >> x >> y >> z;
+
+			std::cout << x << y << z << std::endl;
+			data.Vertices.push_back(Vertex(x, y, z,
+				0.0f, 0.0f, -1.0f,
+				1.0f, 0.0f, 0.0f,
+				0.0f, 1.0f));
+		} else if (type == "f")
+		{
+			std::string indicesString;
+			while (in >> indicesString)
+			{
+				std::istringstream indices(indicesString);
+				char dummy;
+				int i1, i2, i3;
+				indices >> i1 >> dummy >> i2 >> dummy >> i3;
+				i1 -= 1;  
+				data.Indices32.push_back(i1+1);
+				std::cout << i1 << std::endl;
+			}
+		}
+	}
+	meshFile.close();
+
+	RenderMesh* geometry = new RenderMesh();
+	geometry->MeshData = data;
+	GenerateGeometryBuffer(geometry);
+	
+	return geometry;
+}
+
+void GeometryFactory::Subdivide(MeshData& meshData)
+{
+	// Save a copy of the input geometry.
+	MeshData inputCopy = meshData;
+
+
+	meshData.Vertices.resize(0);
+	meshData.Indices32.resize(0);
+
+	//       v1
+	//       *
+	//      / \
+	//     /   \
+	//  m0*-----*m1
+	//   / \   / \
+	//  /   \ /   \
+	// *-----*-----*
+	// v0    m2     v2
+
+	uint32 numTris = (uint32)inputCopy.Indices32.size()/3;
+	for(uint32 i = 0; i < numTris; ++i)
+	{
+		Vertex v0 = inputCopy.Vertices[ inputCopy.Indices32[i*3+0] ];
+		Vertex v1 = inputCopy.Vertices[ inputCopy.Indices32[i*3+1] ];
+		Vertex v2 = inputCopy.Vertices[ inputCopy.Indices32[i*3+2] ];
+
+		//
+		// Generate the midpoints.
+		//
+
+        Vertex m0 = MidPoint(v0, v1);
+        Vertex m1 = MidPoint(v1, v2);
+        Vertex m2 = MidPoint(v0, v2);
+
+		//
+		// Add new geometry.
+		//
+
+		meshData.Vertices.push_back(v0); // 0
+		meshData.Vertices.push_back(v1); // 1
+		meshData.Vertices.push_back(v2); // 2
+		meshData.Vertices.push_back(m0); // 3
+		meshData.Vertices.push_back(m1); // 4
+		meshData.Vertices.push_back(m2); // 5
+ 
+		meshData.Indices32.push_back(i*6+0);
+		meshData.Indices32.push_back(i*6+3);
+		meshData.Indices32.push_back(i*6+5);
+
+		meshData.Indices32.push_back(i*6+3);
+		meshData.Indices32.push_back(i*6+4);
+		meshData.Indices32.push_back(i*6+5);
+
+		meshData.Indices32.push_back(i*6+5);
+		meshData.Indices32.push_back(i*6+4);
+		meshData.Indices32.push_back(i*6+2);
+
+		meshData.Indices32.push_back(i*6+3);
+		meshData.Indices32.push_back(i*6+1);
+		meshData.Indices32.push_back(i*6+4);
+	}
+}
+
+Vertex GeometryFactory::MidPoint(const Vertex& v0, const Vertex& v1)
+{
+    XMVECTOR p0 = XMLoadFloat3(&v0.Position);
+    XMVECTOR p1 = XMLoadFloat3(&v1.Position);
+
+    XMVECTOR n0 = XMLoadFloat3(&v0.Normal);
+    XMVECTOR n1 = XMLoadFloat3(&v1.Normal);
+
+    XMVECTOR tan0 = XMLoadFloat3(&v0.TangentU);
+    XMVECTOR tan1 = XMLoadFloat3(&v1.TangentU);
+
+    XMVECTOR tex0 = XMLoadFloat2(&v0.TexC);
+    XMVECTOR tex1 = XMLoadFloat2(&v1.TexC);
+
+    // Compute the midpoints of all the attributes.  Vectors need to be normalized
+    // since linear interpolating can make them not unit length.  
+    XMVECTOR pos = 0.5f*(p0 + p1);
+    XMVECTOR normal = XMVector3Normalize(0.5f*(n0 + n1));
+    XMVECTOR tangent = XMVector3Normalize(0.5f*(tan0+tan1));
+    XMVECTOR tex = 0.5f*(tex0 + tex1);
+
+    Vertex v;
+    XMStoreFloat3(&v.Position, pos);
+    XMStoreFloat3(&v.Normal, normal);
+    XMStoreFloat3(&v.TangentU, tangent);
+    XMStoreFloat2(&v.TexC, tex);
+
+    return v;
+}
+
+void GeometryFactory::GenerateGeometryBuffer(RenderMesh* geo)
+{
+
+	std::vector<Vertex>* vertex = &geo->MeshData.Vertices;
+	std::vector<uint16> index = geo->MeshData.GetIndices16();
+
+	const UINT vbByteSize = (UINT)vertex->size() * sizeof(Vertex);
+	const UINT ibByteSize = (UINT)index.size() * sizeof(std::uint16_t);
+
+	// Emplacement memoir CPU
+	D3DCreateBlob(vbByteSize, &geo->VertexBufferCPU);
+	CopyMemory(geo->VertexBufferCPU->GetBufferPointer(), vertex->data(), vbByteSize);
+
+	D3DCreateBlob(ibByteSize, &geo->IndexBufferCPU);
+	CopyMemory(geo->IndexBufferCPU->GetBufferPointer(), index.data(), ibByteSize);
+
+	// Copy the triangle data to the vertex buffer.
+	geo->VertexBufferGPU = d3dUtils::CreateBuffer(mpDevice, mpCommandList, vertex->data(), vbByteSize, geo->VertexBufferUploader);
+
+	// Copy the triangle data to the indices buffer.
+	geo->IndexBufferGPU = d3dUtils::CreateBuffer(mpDevice, mpCommandList, index.data(), ibByteSize, geo->IndexBufferUploader);
+
+	// Initialize the vertex buffer view.
+	geo->VertexByteStride = sizeof(Vertex);
+	geo->VertexBufferByteSize = vbByteSize;
+
+	// Initialize the indices buffer view.
+	geo->IndexFormat = DXGI_FORMAT_R16_UINT;
+	geo->IndexBufferByteSize = ibByteSize;
 }
