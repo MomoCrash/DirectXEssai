@@ -37,6 +37,7 @@ private:
     
     void OnResize() override;
 
+    void AddRenderItem(RenderItem* item);
     void BuildRenderableItem(); // Add RenderItem who will be used
     void BuildDescriptorHeaps(); // Build RenderItem & Pass descriptor
     void BuildConstantBuffer(); // Build Constant Buffer for Pass & perObject
@@ -56,7 +57,7 @@ private:
 
     std::vector<RenderItem*> mRendersItems;
     
-    UploadBuffer<ObjectConstants>* mObjectCB;
+    std::vector<UploadBuffer<ObjectConstants>*> mObjectsCB;
     UploadBuffer<PassConstants>* mPassCB;
     
     UINT mPassCbvOffset = 0;

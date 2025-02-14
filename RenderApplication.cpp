@@ -8,7 +8,6 @@ RenderApplication::RenderApplication(HINSTANCE instance) : Application(instance)
                                                            mRootSignature(nullptr),
                                                            mCbvHeap(nullptr), mPSO(nullptr),
                                                            shader(L"shader\\default.hlsl"), mProj(),
-                                                           mObjectCB(nullptr),
                                                            mPassCB(nullptr),
                                                            mLastMousePosition(),
                                                            mTurn(false)
@@ -30,18 +29,13 @@ bool RenderApplication::Initialize()
 	
 	// Notre root signature
 	{
-    	CD3DX12_DESCRIPTOR_RANGE cbvTable0;
-    	cbvTable0.Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0);
-
-    	CD3DX12_DESCRIPTOR_RANGE cbvTable1;
-    	cbvTable1.Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 1);
 
     	// Root parameter can be a table, root descriptor or root constants.
     	CD3DX12_ROOT_PARAMETER slotRootParameter[2];
     	
     	// Create root CBVs.
-    	slotRootParameter[0].InitAsDescriptorTable(1, &cbvTable0);
-    	slotRootParameter[1].InitAsDescriptorTable(1, &cbvTable1);
+    	slotRootParameter[0].InitAsConstantBufferView(0);
+    	slotRootParameter[1].InitAsConstantBufferView(1);
 
     	// A root signature is an array of root parameters.
     	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(2, slotRootParameter, 0, nullptr, 
@@ -68,14 +62,14 @@ bool RenderApplication::Initialize()
 			IID_PPV_ARGS(&mRootSignature));
 	}
 
-	BuildRenderableItem();
-	
-	BuildDescriptorHeaps();
-	BuildConstantBuffer();
-	
+
+    BuildDescriptorHeaps();
+    BuildConstantBuffer();
+
     BuildPSO();
 
-	// Execute the initialization commands.
+    BuildRenderableItem();
+    // Execute the initialization commands.
 	mCommandList->Close();
 	ID3D12CommandList* cmdsLists[] = { mCommandList };
 	mCommandQueue->ExecuteCommandLists(_countof(cmdsLists), cmdsLists);
@@ -94,25 +88,25 @@ void RenderApplication::BuildRenderableItem()
 	
 	RenderMesh* boxMesh = mFactory->CreateBox(1.0f, 1.0f, 1.0f, 3);
 	RenderMesh* circleMesh = mFactory->CreateGeosphere(2.0f, 5.0f);
-	RenderMesh* customMesh = mFactory->LoadGeometryFromFile("objects/crystal.obj");
+	RenderMesh* customMesh = mFactory->LoadGeometryFromFile("objects/FinalBaseMesh.obj");
 	
 	RenderItem* box = new RenderItem(boxMesh);
 	box->Transform.SetPosition(XMVectorSet(5, 0, 1.0f, 1));
 	XMStoreFloat4(&box->Color, XMVectorSet(0.0f, 0.0f, 1.0f, 1.0f));
-	box->ObjCBIndex = mRendersItems.size();
-	mRendersItems.push_back(box);
+	box->ObjCBIndex = 0;
+	AddRenderItem(box);
 
 	RenderItem* box1 = new RenderItem(boxMesh);
 	box1->Transform.SetPosition(XMVectorSet(0, 0, 0, 1));
 	XMStoreFloat4(&box1->Color, XMVectorSet(0.0f, 1.0f, 0.0f, 1.0f));
-	box1->ObjCBIndex = mRendersItems.size();
-	mRendersItems.push_back(box1);
+	box1->ObjCBIndex = 0;
+	AddRenderItem(box1);
 
 	RenderItem* circle = new RenderItem(customMesh);
 	circle->Transform.SetPosition(XMVectorSet(10, 0, 0, 1));
 	XMStoreFloat4(&circle->Color, XMVectorSet(1.0f, 0.0f, 0.0f, 1.0f));
-	circle->ObjCBIndex = mRendersItems.size();
-	mRendersItems.push_back(circle);
+	circle->ObjCBIndex = 0;
+	AddRenderItem(circle);
 }
 
 
@@ -127,7 +121,7 @@ void RenderApplication::BuildDescriptorHeaps()
 	mPassCbvOffset = objCount;
 
 	D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc;
-	cbvHeapDesc.NumDescriptors = numDescriptors;
+	cbvHeapDesc.NumDescriptors = 1;
 	cbvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 	cbvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 	cbvHeapDesc.NodeMask = 0;
@@ -135,48 +129,16 @@ void RenderApplication::BuildDescriptorHeaps()
 	                              IID_PPV_ARGS(&mCbvHeap));
 }
 
+void RenderApplication::AddRenderItem(RenderItem* item)
+{
+	mObjectsCB.push_back(new UploadBuffer<ObjectConstants>(mDevice, 1, true));
+	mRendersItems.push_back(item);
+}
+
 void RenderApplication::BuildConstantBuffer()
 {
 
 	mPassCB = new UploadBuffer<PassConstants>(mDevice, 1, true);
-	mObjectCB = new UploadBuffer<ObjectConstants>(mDevice, mRendersItems.size(), true);
-	
-	UINT objCBByteSize = d3dUtils::CalcConstantBufferByteSize(sizeof(ObjectConstants));
-	UINT objCount = (UINT)mRendersItems.size();
-	
-	auto objectCB = mObjectCB->Resource();
-	for(UINT i = 0; i < objCount; ++i)
-	{
-		D3D12_GPU_VIRTUAL_ADDRESS cbAddress = objectCB->GetGPUVirtualAddress();
-		// Offset to the ith object constant buffer in the buffer.
-		cbAddress += i*objCBByteSize;
-
-		// Offset to the object cbv in the descriptor heap.
-		CD3DX12_CPU_DESCRIPTOR_HANDLE cpuHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(mCbvHeap->GetCPUDescriptorHandleForHeapStart());
-		cpuHandle.Offset(i, mCbvSrvUavDescriptorSize);
-
-		D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc;
-		cbvDesc.BufferLocation = cbAddress;
-		cbvDesc.SizeInBytes = objCBByteSize;
-
-		mDevice->CreateConstantBufferView(&cbvDesc, cpuHandle);
-	}
-
-	UINT passCBByteSize = d3dUtils::CalcConstantBufferByteSize(sizeof(PassConstants));
-	auto passCB = mPassCB->Resource();
-	D3D12_GPU_VIRTUAL_ADDRESS cbAddress = passCB->GetGPUVirtualAddress();
-
-	// Offset to the pass cbv in the descriptor heap
-	int heapIndex = mPassCbvOffset;
-	auto handle = CD3DX12_CPU_DESCRIPTOR_HANDLE(mCbvHeap->GetCPUDescriptorHandleForHeapStart());
-	handle.Offset(heapIndex, mCbvSrvUavDescriptorSize);
-
-	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc;
-	cbvDesc.BufferLocation = cbAddress;
-	cbvDesc.SizeInBytes = passCBByteSize;
-    
-	mDevice->CreateConstantBufferView(&cbvDesc, handle);
-	
 }
 
 void RenderApplication::BuildPSO()
@@ -215,24 +177,21 @@ void RenderApplication::BuildPSO()
 
 void RenderApplication::DrawRenderItems()
 {
-
+	
 	// For each render item...
 	for(size_t i = 0; i < mRendersItems.size(); ++i)
 	{
+		auto objectCB = mObjectsCB[i]->Resource();
 		auto ri = mRendersItems[i];
 
-		D3D12_VERTEX_BUFFER_VIEW vertexView = ri->Mesh->VertexBufferView();
-		D3D12_INDEX_BUFFER_VIEW indexView = ri->Mesh->IndexBufferView();
-		mCommandList->IASetVertexBuffers(0, 1, &vertexView);
-		mCommandList->IASetIndexBuffer(&indexView);
+		D3D12_VERTEX_BUFFER_VIEW vertexBuffer = ri->Mesh->VertexBufferView();
+		D3D12_INDEX_BUFFER_VIEW indexBuffer = ri->Mesh->IndexBufferView();
+		
+		mCommandList->IASetVertexBuffers(0, 1, &vertexBuffer);
+		mCommandList->IASetIndexBuffer(&indexBuffer);
 		mCommandList->IASetPrimitiveTopology(ri->PrimitiveType);
 
-		// Offset to the CBV in the descriptor heap for this object and for this frame resource.
-		UINT cbvIndex = ri->ObjCBIndex;
-		auto cbvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
-		cbvHandle.Offset(cbvIndex, mCbvSrvUavDescriptorSize);
-
-		mCommandList->SetGraphicsRootDescriptorTable(0, cbvHandle);
+		mCommandList->SetGraphicsRootConstantBufferView(0, objectCB->GetGPUVirtualAddress());
 
 		mCommandList->DrawIndexedInstanced(ri->IndexCount, 1, ri->StartIndexLocation, ri->BaseVertexLocation, 0);
 	}
@@ -268,14 +227,10 @@ void RenderApplication::Draw()
 	// Specify the buffers we are going to render to.
 	mCommandList->OMSetRenderTargets(1,
 		&currentBackBufferView, true, &depthStencilView);
-	
-	ID3D12DescriptorHeap* descriptorHeaps[] = { mCbvHeap };
-	mCommandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
 
-	int passCbvIndex = mPassCbvOffset;
-	auto passCbvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
-	passCbvHandle.Offset(passCbvIndex, mCbvSrvUavDescriptorSize);
-	mCommandList->SetGraphicsRootDescriptorTable(1, passCbvHandle);
+	// Bind per-pass constant buffer.  We only need to do this once per-pass.
+	auto passCB = mPassCB->Resource();
+	mCommandList->SetGraphicsRootConstantBufferView(1, passCB->GetGPUVirtualAddress());
 
 	DrawRenderItems();
 
@@ -325,10 +280,11 @@ void RenderApplication::Update()
 
 	if (d3dUtils::IsKeyDown('M'))
 	{
-		XMVECTOR bPosition = XMLoadFloat3(&mRendersItems[0]->Transform.position);
-		XMVECTOR bForward = XMLoadFloat3(&mRendersItems[0]->Transform.forward);
-		bPosition = XMVectorAdd(bPosition, bForward * mTimer.DeltaTime() * speed);
-		mRendersItems[0]->Transform.SetPosition(bPosition);
+		RenderItem* box1 = new RenderItem(mFactory->CreateBox(1.0f, 1.0f, 1.0f, 3));
+		box1->Transform.SetPosition(XMVectorSet(0, 2, 0, 1));
+		XMStoreFloat4(&box1->Color, XMVectorSet(0.0f, 1.0f, 0.0f, 1.0f));
+		box1->ObjCBIndex = 0;
+		AddRenderItem(box1);
 	}
 	
 	if (d3dUtils::IsKeyDown('Z'))
@@ -398,8 +354,9 @@ void RenderApplication::UpdatePassBC()
 
 void RenderApplication::UpdatePerObjectBC()
 {
-	for(auto& e : mRendersItems)
+	for(int i = 0; i < mRendersItems.size(); i++)
 	{
+		auto& e = mRendersItems[i];
 
 		e->Transform.UpdateMatrix();
 		
@@ -410,7 +367,7 @@ void RenderApplication::UpdatePerObjectBC()
 		XMStoreFloat4x4(&objConstants.World, XMMatrixTranspose(world));
 		objConstants.Color = e->Color;
 		
-		mObjectCB->CopyData(e->ObjCBIndex, objConstants);
+		mObjectsCB[i]->CopyData(e->ObjCBIndex, objConstants);
 		
 	}
 }

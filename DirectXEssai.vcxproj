@@ -330,6 +330,7 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="objects\crystal.obj" />
+    <Content Include="objects\FinalBaseMesh.obj" />
     <Content Include="shader\default.hlsl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

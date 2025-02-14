@@ -441,24 +441,49 @@ RenderMesh* GeometryFactory::LoadGeometryFromFile(std::string path)
 			float x, y, z;
 			//now read the whitespace-separated floats
 			in >> x >> y >> z;
-
-			std::cout << x << y << z << std::endl;
+			
 			data.Vertices.push_back(Vertex(x, y, z,
 				0.0f, 0.0f, -1.0f,
 				1.0f, 0.0f, 0.0f,
 				0.0f, 1.0f));
 		} else if (type == "f")
 		{
+			std::vector<int> faceIndices;
 			std::string indicesString;
-			while (in >> indicesString)
-			{
+
+			while (in >> indicesString) {
 				std::istringstream indices(indicesString);
-				char dummy;
-				int i1, i2, i3;
-				indices >> i1 >> dummy >> i2 >> dummy >> i3;
-				i1 -= 1;  
-				data.Indices32.push_back(i1+1);
-				std::cout << i1 << std::endl;
+				std::string vIndex, vtIndex, vnIndex;
+				int v, vt = -1, vn = -1;
+
+				std::getline(indices, vIndex, '/');  // Read vertex index
+				if (!vIndex.empty()) v = std::stoi(vIndex) - 1;
+
+				if (std::getline(indices, vtIndex, '/')) {  // Read texture index
+					if (!vtIndex.empty()) vt = std::stoi(vtIndex) - 1;
+				}
+
+				if (std::getline(indices, vnIndex, '/')) {  // Read normal index
+					if (!vnIndex.empty()) vn = std::stoi(vnIndex) - 1;
+				}
+
+				faceIndices.push_back(v);
+			}
+
+			// Handle triangulation for quads
+			if (faceIndices.size() == 3) {
+				data.Indices32.push_back(faceIndices[0]);
+				data.Indices32.push_back(faceIndices[1]);
+				data.Indices32.push_back(faceIndices[2]);
+			} else if (faceIndices.size() == 4) {
+				// Convert quad to two triangles
+				data.Indices32.push_back(faceIndices[0]);
+				data.Indices32.push_back(faceIndices[1]);
+				data.Indices32.push_back(faceIndices[2]);
+
+				data.Indices32.push_back(faceIndices[0]);
+				data.Indices32.push_back(faceIndices[2]);
+				data.Indices32.push_back(faceIndices[3]);
 			}
 		}
 	}
